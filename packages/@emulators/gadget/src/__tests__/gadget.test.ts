@@ -11,7 +11,7 @@ function createTestApp() {
 }
 
 async function gql(app: ReturnType<typeof createServer>["app"], query: string, variables?: Record<string, unknown>) {
-  return app.request(`${base}/graphql`, {
+  return app.request(`${base}/api/graphql`, {
     method: "POST",
     headers: {
       Authorization: "Bearer gadget_test_api_key",
@@ -527,9 +527,48 @@ describe("Gadget emulator", () => {
     });
   });
 
+  it("serves Grow's exact /api/graphql route and keeps /graphql as a compatibility alias", async () => {
+    const { app } = createTestApp();
+    const query = "{ shopifyShops(first: 1) { edges { node { id } } } }";
+
+    const primary = await app.request(`${base}/api/graphql`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer gadget_test_api_key",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query }),
+    });
+    expect(primary.status).toBe(200);
+    expect(await primary.json()).toEqual({
+      data: {
+        shopifyShops: {
+          edges: [{ node: { id: "gid://shopify/Shop/1" } }],
+        },
+      },
+    });
+
+    const legacy = await app.request(`${base}/graphql`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer gadget_test_api_key",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query }),
+    });
+    expect(legacy.status).toBe(200);
+    expect(await legacy.json()).toEqual({
+      data: {
+        shopifyShops: {
+          edges: [{ node: { id: "gid://shopify/Shop/1" } }],
+        },
+      },
+    });
+  });
+
   it("requires API key auth", async () => {
     const { app } = createTestApp();
-    const res = await app.request(`${base}/graphql`, {
+    const res = await app.request(`${base}/api/graphql`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: "{ shopifyShops(first: 1) { edges { node { id } } } }" }),
@@ -542,7 +581,7 @@ describe("Gadget emulator", () => {
 
   it("dispatches Grow-shaped integration and sample rejection webhooks and records deliveries", async () => {
     const { app, store } = createTestApp();
-    seedFromConfig(store, {
+    seedFromConfig(store, base, {
       webhooks: [
         {
           id: "grow-webhook",

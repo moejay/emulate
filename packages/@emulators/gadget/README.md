@@ -12,8 +12,10 @@ npm install @emulators/gadget
 
 ## Endpoints
 
-- `POST /graphql` — Gadget GraphQL endpoint with API-key auth
-- `GET /graphql` — GraphQL GET transport
+- `POST /api/graphql` — Gadget GraphQL endpoint with API-key auth, matching Grow exactly
+- `GET /api/graphql` — GraphQL GET transport, matching Grow exactly
+- `POST /graphql` — compatibility alias for older local harnesses
+- `GET /graphql` — compatibility alias for older local harnesses
 - `GET /` — tabbed inspector for shops, customers, products, orders, sample requests, auth, webhooks, and deliveries
 - `POST /inspector/integration-event` — inspector control for dispatching a `shopify.integration_event`
 - `POST /inspector/sample-requests/:id/reject` — inspector control for dispatching a `sample_request.rejected` event

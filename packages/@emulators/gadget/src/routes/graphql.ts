@@ -389,28 +389,33 @@ interface GraphQLContext {
 export function graphqlRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
 
-  app.get("/graphql", async (c) => {
-    const authError = applyGadgetApiKeyAuth(c, store);
-    if (authError) return authError;
-    const result = await runGraphQL(c.req.query("query") ?? "", {
-      variables: parseVariables(c.req.query("variables")),
-      operationName: c.req.query("operationName") ?? undefined,
-      context: { c, store },
+  const registerEndpoint = (path: string) => {
+    app.get(path, async (c) => {
+      const authError = applyGadgetApiKeyAuth(c, store);
+      if (authError) return authError;
+      const result = await runGraphQL(c.req.query("query") ?? "", {
+        variables: parseVariables(c.req.query("variables")),
+        operationName: c.req.query("operationName") ?? undefined,
+        context: { c, store },
+      });
+      return c.json(result, result.errors ? 400 : 200);
     });
-    return c.json(result, result.errors ? 400 : 200);
-  });
 
-  app.post("/graphql", async (c) => {
-    const authError = applyGadgetApiKeyAuth(c, store);
-    if (authError) return authError;
-    const body = await readGraphQLBody(c);
-    const result = await runGraphQL(body.query, {
-      variables: body.variables,
-      operationName: body.operationName,
-      context: { c, store },
+    app.post(path, async (c) => {
+      const authError = applyGadgetApiKeyAuth(c, store);
+      if (authError) return authError;
+      const body = await readGraphQLBody(c);
+      const result = await runGraphQL(body.query, {
+        variables: body.variables,
+        operationName: body.operationName,
+        context: { c, store },
+      });
+      return c.json(result, result.errors ? 400 : 200);
     });
-    return c.json(result, result.errors ? 400 : 200);
-  });
+  };
+
+  registerEndpoint("/graphql");
+  registerEndpoint("/api/graphql");
 }
 
 async function runGraphQL(

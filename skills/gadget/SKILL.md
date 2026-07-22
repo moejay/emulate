@@ -40,7 +40,7 @@ const { app, store } = createServer(gadgetPlugin, {
 });
 
 gadgetPlugin.seed?.(store, "http://localhost:4400");
-seedFromConfig(store, {
+seedFromConfig(store, "http://localhost:4400", {
   webhooks: [
     {
       id: "grow-webhook",
@@ -60,7 +60,7 @@ export default app;
 
 | Grow target | Emulator URL |
 |-------------|--------------|
-| `$GADGET_BDR_APP_URL/api/graphql` | `$GADGET_EMULATOR_URL/graphql` |
+| `$GADGET_BDR_APP_URL/api/graphql` | `$GADGET_EMULATOR_URL/api/graphql` |
 | sample request inspector | `$GADGET_EMULATOR_URL/` |
 
 ## Auth

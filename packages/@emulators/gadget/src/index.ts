@@ -333,7 +333,7 @@ export function seedDefaults(store: Store): void {
   }
 }
 
-export function seedFromConfig(store: Store, config: GadgetSeedConfig): void {
+export function seedFromConfig(store: Store, _baseUrl: string, config: GadgetSeedConfig): void {
   const gs = getGadgetStore(store);
   const defaultShopId = config.shops?.[0]?.id ?? gs.shops.all()[0]?.gadget_id ?? DEFAULT_SHOP_ID;
 
