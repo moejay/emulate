@@ -72,6 +72,12 @@
     "@emulators/clerk": "workspace:*",
     "@emulators/linear": "workspace:*",
     "@emulators/twilio": "workspace:*",
+    "@emulators/stytch": "workspace:*",
+    "@emulators/nango": "workspace:*",
+    "@emulators/gadget": "workspace:*",
+    "@emulators/faire": "workspace:*",
+    "@emulators/shopify": "workspace:*",
+    "@emulators/quickbooks": "workspace:*",
     "tsup": "^8",
     "typescript": "^5.7"
   }

@@ -84,6 +84,23 @@ describe("createEmulator", () => {
     await slack.close();
   });
 
+  it.each([
+    ["stytch", 14040],
+    ["nango", 14041],
+    ["gadget", 14042],
+    ["faire", 14043],
+    ["shopify", 14044],
+    ["quickbooks", 14045],
+  ] as const)("starts the %s provider emulator", async (service, port) => {
+    const emulator = await createEmulator({ service, port });
+
+    expect(emulator.url).toBe(`http://localhost:${port}`);
+    const inspector = await fetch(emulator.url);
+    expect(inspector.status).toBe(200);
+
+    await emulator.close();
+  });
+
   it("throws on unknown service", async () => {
     // @ts-expect-error testing invalid service name
     await expect(createEmulator({ service: "unknown-svc" })).rejects.toThrow("Unknown service");

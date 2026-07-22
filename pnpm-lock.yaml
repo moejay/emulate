@@ -632,6 +632,41 @@ importers:
         specifier: ^4.1.0
         version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
 
+  packages/@emulators/faire:
+    dependencies:
+      '@emulators/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
+  packages/@emulators/gadget:
+    dependencies:
+      '@emulators/core':
+        specifier: workspace:*
+        version: link:../core
+      graphql:
+        specifier: ^17.0.0
+        version: 17.0.0
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
   packages/@emulators/github:
     dependencies:
       '@emulators/core':
@@ -724,6 +759,22 @@ importers:
         specifier: ^4.1.0
         version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
 
+  packages/@emulators/nango:
+    dependencies:
+      '@emulators/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
   packages/@emulators/okta:
     dependencies:
       '@emulators/core':
@@ -743,7 +794,39 @@ importers:
         specifier: ^4.1.0
         version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
 
+  packages/@emulators/quickbooks:
+    dependencies:
+      '@emulators/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
   packages/@emulators/resend:
+    dependencies:
+      '@emulators/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
+  packages/@emulators/shopify:
     dependencies:
       '@emulators/core':
         specifier: workspace:*
@@ -783,6 +866,25 @@ importers:
       '@emulators/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.3(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.4)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
+  packages/@emulators/stytch:
+    dependencies:
+      '@emulators/core':
+        specifier: workspace:*
+        version: link:../core
+      jose:
+        specifier: ^6
+        version: 6.2.2
     devDependencies:
       tsup:
         specifier: ^8
@@ -856,6 +958,12 @@ importers:
       '@emulators/core':
         specifier: workspace:*
         version: link:../@emulators/core
+      '@emulators/faire':
+        specifier: workspace:*
+        version: link:../@emulators/faire
+      '@emulators/gadget':
+        specifier: workspace:*
+        version: link:../@emulators/gadget
       '@emulators/github':
         specifier: workspace:*
         version: link:../@emulators/github
@@ -871,18 +979,30 @@ importers:
       '@emulators/mongoatlas':
         specifier: workspace:*
         version: link:../@emulators/mongoatlas
+      '@emulators/nango':
+        specifier: workspace:*
+        version: link:../@emulators/nango
       '@emulators/okta':
         specifier: workspace:*
         version: link:../@emulators/okta
+      '@emulators/quickbooks':
+        specifier: workspace:*
+        version: link:../@emulators/quickbooks
       '@emulators/resend':
         specifier: workspace:*
         version: link:../@emulators/resend
+      '@emulators/shopify':
+        specifier: workspace:*
+        version: link:../@emulators/shopify
       '@emulators/slack':
         specifier: workspace:*
         version: link:../@emulators/slack
       '@emulators/stripe':
         specifier: workspace:*
         version: link:../@emulators/stripe
+      '@emulators/stytch':
+        specifier: workspace:*
+        version: link:../@emulators/stytch
       '@emulators/twilio':
         specifier: workspace:*
         version: link:../@emulators/twilio
