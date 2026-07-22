@@ -16,6 +16,10 @@ function appCredentials(value = "emu_faire_app_id:emu_faire_app_secret") {
   return Buffer.from(value, "utf8").toString("base64");
 }
 
+function appCredentialsBasic(value = "emu_faire_app_id:emu_faire_app_secret") {
+  return `Basic ${appCredentials(value)}`;
+}
+
 async function login(app: ReturnType<typeof createTestApp>["app"], email = "brand@example.com", password = "password") {
   const res = await app.request(`${BASE_URL}/api/v2/users/login`, {
     method: "POST",
@@ -90,6 +94,86 @@ describe("Faire emulator", () => {
     });
     expect(brandProfile.status).toBe(200);
     expect(await brandProfile.json()).toMatchObject({ brand_id: "b_emulate", name: "Emulate Brand" });
+  });
+
+  it("validates OAuth callback redirect_url on authorize and token exchange", async () => {
+    const { app } = createTestApp();
+
+    const authorize = await app.request(
+      `${BASE_URL}/oauth2/authorize?applicationId=emu_faire_app_id&scope=READ_ORDERS&scope=READ_BRAND&state=test-state&redirectUrl=${encodeURIComponent("http://localhost:3000/api/auth/callback/faire")}`,
+    );
+    expect(authorize.status).toBe(200);
+    const invalidCallback = await app.request(`${BASE_URL}/oauth2/authorize/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        user_id: "u_emulate",
+        brand_id: "b_emulate",
+        application_id: "emu_faire_app_id",
+        state: "test-state",
+        scopes: "READ_ORDERS,READ_BRAND",
+      }),
+    });
+    expect(invalidCallback.status).toBe(400);
+
+    const callback = await app.request(`${BASE_URL}/oauth2/authorize/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        user_id: "u_emulate",
+        brand_id: "b_emulate",
+        application_id: "emu_faire_app_id",
+        redirect_url: "http://localhost:3000/api/auth/callback/faire",
+        state: "test-state",
+        scopes: "READ_ORDERS,READ_BRAND",
+      }),
+    });
+    expect(callback.status).toBe(302);
+    const redirected = new URL(callback.headers.get("location") ?? "");
+    const code = redirected.searchParams.get("authorization_code");
+    expect(code).toBeTruthy();
+
+    const tokenMissingRedirect = await app.request(`${BASE_URL}/api/external-api-oauth2/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "AUTHORIZATION_CODE",
+        application_token: "emu_faire_app_id",
+        application_secret: "emu_faire_app_secret",
+        scope: ["READ_ORDERS", "READ_BRAND"],
+        authorization_code: code,
+      }),
+    });
+    expect(tokenMissingRedirect.status).toBe(400);
+
+    const tokenWithAppSecret = await app.request(`${BASE_URL}/api/external-api-oauth2/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        grant_type: "AUTHORIZATION_CODE",
+        application_token: "emu_faire_app_id",
+        application_secret: "emu_faire_app_secret",
+        redirect_url: "http://localhost:3000/api/auth/callback/faire",
+        scope: ["READ_ORDERS", "READ_BRAND"],
+        authorization_code: code,
+      }),
+    });
+    expect(tokenWithAppSecret.status).toBe(200);
+
+    const tokenPayload = (await tokenWithAppSecret.json()) as Record<string, unknown>;
+    const profileViaBasicCredentials = await app.request(`${BASE_URL}/external-api/v2/brands/profile`, {
+      headers: {
+        "X-FAIRE-APP-CREDENTIALS": appCredentialsBasic(),
+        "X-FAIRE-OAUTH-ACCESS-TOKEN": String(tokenPayload.access_token),
+      },
+    });
+    expect(profileViaBasicCredentials.status).toBe(200);
+    expect(await profileViaBasicCredentials.json()).toMatchObject({
+      brand_id: "b_emulate",
+      name: "Emulate Brand",
+    });
   });
 
   it("supports external API v2 order pagination with updated_at_min filtering", async () => {

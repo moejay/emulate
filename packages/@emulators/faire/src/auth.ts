@@ -1,5 +1,5 @@
 import type { Context, Store } from "@emulators/core";
-import { parseCookies } from "@emulators/core";
+import { constantTimeSecretEqual, parseCookies } from "@emulators/core";
 import { getFaireStore } from "./store.js";
 import { makeFaireToken } from "./ids.js";
 import type { FaireOAuthApp, FaireSession, FaireToken, FaireTokenType, FaireUser } from "./entities.js";
@@ -153,8 +153,19 @@ export function issueToken(
 
 export function parseAppCredentials(header: string | undefined): { applicationToken: string; applicationSecret: string } | null {
   if (!header) return null;
+
+  const normalized = header.trim();
+  const token = normalized.toLowerCase().startsWith("basic ")
+    ? normalized.slice(6).trim()
+    : normalized;
+
+  const base64 = token
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .padEnd(Math.ceil(token.length / 4) * 4, "=");
+
   try {
-    const decoded = Buffer.from(header, "base64").toString("utf8");
+    const decoded = Buffer.from(base64, "base64").toString("utf8");
     const separator = decoded.indexOf(":");
     if (separator < 0) return null;
     return {
@@ -176,7 +187,7 @@ export function requireOAuthApp(
   applicationSecret: string,
 ): FaireOAuthApp | undefined {
   const app = getFaireStore(store).oauthApps.findOneBy("application_token", applicationToken);
-  if (!app || app.application_secret !== applicationSecret) return undefined;
+  if (!app || !constantTimeSecretEqual(applicationSecret, app.application_secret)) return undefined;
   return app;
 }
 

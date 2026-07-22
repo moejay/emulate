@@ -43,7 +43,13 @@ export function oauthRoutes({ app, store }: RouteContext): void {
         400,
       );
     }
-    if (redirectUrl && !matchesRedirectUri(redirectUrl, oauthApp.redirect_urls)) {
+    if (!redirectUrl) {
+      return c.html(
+        renderErrorPage("Redirect URL missing", "The redirectUrl parameter is required for OAuth authorization.", SERVICE_LABEL),
+        400,
+      );
+    }
+    if (!matchesRedirectUri(redirectUrl, oauthApp.redirect_urls)) {
       return c.html(
         renderErrorPage("Redirect URL mismatch", "The redirectUrl is not registered for this application.", SERVICE_LABEL),
         400,
@@ -94,9 +100,19 @@ export function oauthRoutes({ app, store }: RouteContext): void {
     const state = bodyStr(body.state);
     const scopes = normalizeScopes(bodyStr(body.scopes));
 
-    const user = fs().users.findOneBy("user_id", userId);
     const appRecord = fs().oauthApps.findOneBy("application_token", applicationId);
-    if (!user || !appRecord || !user.brand_ids.includes(brandId)) {
+    if (!appRecord) {
+      return c.html(renderErrorPage("Authorization failed", "The selected application is invalid.", SERVICE_LABEL), 400);
+    }
+    if (!redirectUrl) {
+      return c.html(renderErrorPage("Authorization failed", "Missing redirect_url.", SERVICE_LABEL), 400);
+    }
+    if (!matchesRedirectUri(redirectUrl, appRecord.redirect_urls)) {
+      return c.html(renderErrorPage("Authorization failed", "The selected redirect_url is invalid.", SERVICE_LABEL), 400);
+    }
+
+    const user = fs().users.findOneBy("user_id", userId);
+    if (!user || !user.brand_ids.includes(brandId)) {
       return c.html(renderErrorPage("Authorization failed", "The selected user or brand is invalid.", SERVICE_LABEL), 400);
     }
 
@@ -128,10 +144,16 @@ export function oauthRoutes({ app, store }: RouteContext): void {
     if (grantType !== "AUTHORIZATION_CODE") {
       return c.json({ message: "Unsupported grant_type" }, 400);
     }
+    if (!redirectUrl) {
+      return c.json({ message: "Missing redirect_url" }, 400);
+    }
 
     const appRecord = fs().oauthApps.findOneBy("application_token", applicationToken);
     if (!appRecord || !constantTimeSecretEqual(applicationSecret, appRecord.application_secret)) {
       return c.json({ message: "Invalid Faire application credentials" }, 401);
+    }
+    if (!matchesRedirectUri(redirectUrl, appRecord.redirect_urls)) {
+      return c.json({ message: "redirect_url mismatch" }, 400);
     }
 
     const pending = consumePendingAuthCode(store, authorizationCode);
@@ -141,7 +163,7 @@ export function oauthRoutes({ app, store }: RouteContext): void {
     if (pending.applicationToken !== applicationToken) {
       return c.json({ message: "Authorization code application mismatch" }, 400);
     }
-    if (redirectUrl && pending.redirectUrl !== redirectUrl) {
+    if (pending.redirectUrl !== redirectUrl) {
       return c.json({ message: "redirect_url mismatch" }, 400);
     }
 
