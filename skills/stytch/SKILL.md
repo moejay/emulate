@@ -29,10 +29,11 @@ http://localhost:4015
   - password strength check
   - password reset start
   - email invite
-- Headless/browser SDK endpoints under `/b2b/*` for:
+- Headless/browser SDK endpoints under `/v1/b2b/*` with legacy `/b2b/*` aliases for:
   - password authenticate
   - password reset by email
   - password reset by session
+  - password strength check
   - discovery magic link send and authenticate
   - invite magic link authenticate
   - session authenticate, exchange, revoke
@@ -108,14 +109,14 @@ The Node SDK uses HTTP Basic auth with `project_id:secret`.
 1. Call `/v1/b2b/magic_links/email/invite`
 2. Open the generated token URL from the inspector auth tab
 3. The app receives `?token=...&stytch_token_type=multi_tenant_magic_links`
-4. Authenticate via `/b2b/magic_links/authenticate`
+4. Authenticate via `/v1/b2b/magic_links/authenticate` or `/b2b/magic_links/authenticate`
 
 ### Discovery magic link flow
 
-1. Call `/b2b/magic_links/email/discovery/send`
+1. Call `/v1/b2b/magic_links/email/discovery/send` or `/b2b/magic_links/email/discovery/send`
 2. Open the generated token URL from the inspector auth tab
-3. Authenticate via `/b2b/magic_links/discovery/authenticate`
-4. Exchange via `/b2b/discovery/intermediate_sessions/exchange`
+3. Authenticate via `/v1/b2b/magic_links/discovery/authenticate` or `/b2b/magic_links/discovery/authenticate`
+4. Exchange via `/v1/b2b/discovery/intermediate_sessions/exchange` or `/b2b/discovery/intermediate_sessions/exchange`
 
 ### Google discovery flow
 
@@ -131,7 +132,7 @@ Choose a seeded Google identity, then the emulator redirects back with:
 ?token=...&stytch_token_type=discovery_oauth
 ```
 
-Authenticate via `/b2b/oauth/discovery/authenticate`, then exchange via `/b2b/discovery/intermediate_sessions/exchange`.
+Authenticate via `/v1/b2b/oauth/discovery/authenticate` or `/b2b/oauth/discovery/authenticate`, then exchange via `/v1/b2b/discovery/intermediate_sessions/exchange` or `/b2b/discovery/intermediate_sessions/exchange`.
 
 ## Inspector
 

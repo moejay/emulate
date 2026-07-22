@@ -1,4 +1,4 @@
-import type { RouteContext } from "@emulators/core";
+import type { AppEnv, Context, RouteContext } from "@emulators/core";
 import {
   createSession,
   defaultCredentials,
@@ -86,7 +86,7 @@ export function magicLinkRoutes({ app, store }: RouteContext): void {
     return c.json(success({ member_id: member.member_id, member: memberResponse(member), organization: organizationResponse(organization) }));
   });
 
-  app.post("/b2b/magic_links/email/discovery/send", async (c) => {
+  const discoverySendHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const emailAddress = typeof body.email_address === "string" ? normalizeEmail(body.email_address) : "";
     if (!emailAddress) return stytchError(c, 400, "missing_required_field", "email_address is required.");
@@ -99,9 +99,12 @@ export function magicLinkRoutes({ app, store }: RouteContext): void {
     });
 
     return c.json(success({}));
-  });
+  };
 
-  app.post("/b2b/magic_links/discovery/authenticate", async (c) => {
+  app.post("/v1/b2b/magic_links/email/discovery/send", discoverySendHandler);
+  app.post("/b2b/magic_links/email/discovery/send", discoverySendHandler);
+
+  const discoveryAuthenticateHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const token = typeof body.discovery_magic_links_token === "string" ? body.discovery_magic_links_token : "";
     const record = ss.authTokens.findOneBy("token", token);
@@ -120,9 +123,12 @@ export function magicLinkRoutes({ app, store }: RouteContext): void {
         })),
       }),
     );
-  });
+  };
 
-  app.post("/b2b/magic_links/authenticate", async (c) => {
+  app.post("/v1/b2b/magic_links/discovery/authenticate", discoveryAuthenticateHandler);
+  app.post("/b2b/magic_links/discovery/authenticate", discoveryAuthenticateHandler);
+
+  const magicLinkAuthenticateHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const token = typeof body.magic_links_token === "string" ? body.magic_links_token : "";
     const record = ss.authTokens.findOneBy("token", token);
@@ -164,5 +170,8 @@ export function magicLinkRoutes({ app, store }: RouteContext): void {
       }),
     );
     return withSessionCookies(response, getStytchConfig(store) ?? defaultCredentials(), next.session);
-  });
+  };
+
+  app.post("/v1/b2b/magic_links/authenticate", magicLinkAuthenticateHandler);
+  app.post("/b2b/magic_links/authenticate", magicLinkAuthenticateHandler);
 }

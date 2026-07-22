@@ -1,8 +1,7 @@
-import type { RouteContext } from "@emulators/core";
+import type { AppEnv, Context, RouteContext } from "@emulators/core";
 import {
   createSession,
   defaultCredentials,
-  discoveredOrganizations,
   generateId,
   getSessionFromRequest,
   issueAuthToken,
@@ -18,19 +17,15 @@ import { getStytchConfig, getStytchStore } from "../store.js";
 export function passwordRoutes({ app, store }: RouteContext): void {
   const ss = getStytchStore(store);
 
-  app.post("/v1/b2b/passwords/strength_check", async (c) => {
-    const auth = requireServerAuth(c, store);
-    if (auth !== true) return auth;
+  const strengthCheckHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     return c.json(success(strengthCheck(body.password)));
-  });
+  };
 
-  app.post("/b2b/passwords/strength_check", async (c) => {
-    const body = await readJsonBody<Record<string, unknown>>(c);
-    return c.json(success(strengthCheck(body.password)));
-  });
+  app.post("/v1/b2b/passwords/strength_check", strengthCheckHandler);
+  app.post("/b2b/passwords/strength_check", strengthCheckHandler);
 
-  app.post("/b2b/passwords/authenticate", async (c) => {
+  const passwordAuthenticateHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const organizationId = typeof body.organization_id === "string" ? body.organization_id : "";
     const emailAddress = typeof body.email_address === "string" ? normalizeEmail(body.email_address) : "";
@@ -77,7 +72,10 @@ export function passwordRoutes({ app, store }: RouteContext): void {
       }),
     );
     return withSessionCookies(response, getStytchConfig(store) ?? defaultCredentials(), next.session);
-  });
+  };
+
+  app.post("/v1/b2b/passwords/authenticate", passwordAuthenticateHandler);
+  app.post("/b2b/passwords/authenticate", passwordAuthenticateHandler);
 
   app.post("/v1/b2b/passwords/email/reset/start", async (c) => {
     const auth = requireServerAuth(c, store);
@@ -108,7 +106,7 @@ export function passwordRoutes({ app, store }: RouteContext): void {
     return c.json(success({}));
   });
 
-  app.post("/b2b/passwords/email/reset", async (c) => {
+  const passwordResetByEmailHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const token = typeof body.password_reset_token === "string" ? body.password_reset_token : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -156,9 +154,12 @@ export function passwordRoutes({ app, store }: RouteContext): void {
       }),
     );
     return withSessionCookies(response, getStytchConfig(store) ?? defaultCredentials(), next.session);
-  });
+  };
 
-  app.post("/b2b/passwords/session/reset", async (c) => {
+  app.post("/v1/b2b/passwords/email/reset", passwordResetByEmailHandler);
+  app.post("/b2b/passwords/email/reset", passwordResetByEmailHandler);
+
+  const passwordResetBySessionHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const resolved = getSessionFromRequest(c, store, body);
     if (!resolved) return stytchError(c, 401, "session_not_found", "Session not found.");
@@ -172,7 +173,10 @@ export function passwordRoutes({ app, store }: RouteContext): void {
     });
 
     return c.json(success({ member_id: resolved.member.member_id, member: memberResponse(ss.members.get(resolved.member.id)!) }));
-  });
+  };
+
+  app.post("/v1/b2b/passwords/session/reset", passwordResetBySessionHandler);
+  app.post("/b2b/passwords/session/reset", passwordResetBySessionHandler);
 
   function strengthCheck(rawPassword: unknown) {
     const password = typeof rawPassword === "string" ? rawPassword : "";

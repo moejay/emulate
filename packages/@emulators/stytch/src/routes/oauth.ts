@@ -1,4 +1,4 @@
-import type { RouteContext } from "@emulators/core";
+import type { AppEnv, Context, RouteContext } from "@emulators/core";
 import { escapeHtml, renderCardPage, renderErrorPage, renderUserButton } from "@emulators/core";
 import {
   createSession,
@@ -90,7 +90,7 @@ export function oauthRoutes({ app, store }: RouteContext): void {
     return c.redirect(location.toString(), 302);
   });
 
-  app.post("/b2b/oauth/discovery/authenticate", async (c) => {
+  const discoveryAuthenticateHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const token = typeof body.discovery_oauth_token === "string" ? body.discovery_oauth_token : "";
     const record = ss.authTokens.findOneBy("token", token);
@@ -120,9 +120,12 @@ export function oauthRoutes({ app, store }: RouteContext): void {
         })),
       }),
     );
-  });
+  };
 
-  app.post("/b2b/discovery/intermediate_sessions/exchange", async (c) => {
+  app.post("/v1/b2b/oauth/discovery/authenticate", discoveryAuthenticateHandler);
+  app.post("/b2b/oauth/discovery/authenticate", discoveryAuthenticateHandler);
+
+  const intermediateSessionExchangeHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const intermediateSessionToken = typeof body.intermediate_session_token === "string" ? body.intermediate_session_token : "";
     const organizationId = typeof body.organization_id === "string" ? body.organization_id : "";
@@ -170,5 +173,8 @@ export function oauthRoutes({ app, store }: RouteContext): void {
       }),
     );
     return withSessionCookies(response, getStytchConfig(store) ?? defaultCredentials(), next.session);
-  });
+  };
+
+  app.post("/v1/b2b/discovery/intermediate_sessions/exchange", intermediateSessionExchangeHandler);
+  app.post("/b2b/discovery/intermediate_sessions/exchange", intermediateSessionExchangeHandler);
 }

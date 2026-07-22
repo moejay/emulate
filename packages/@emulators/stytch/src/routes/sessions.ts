@@ -18,31 +18,23 @@ import { getStytchConfig, getStytchStore } from "../store.js";
 export function sessionRoutes({ app, store }: RouteContext): void {
   const ss = getStytchStore(store);
 
-  app.post("/v1/b2b/sessions/authenticate", async (c) => {
-    const auth = requireServerAuth(c, store);
-    if (auth !== true) return auth;
+  const authenticateHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     return authenticateFromSession(c, body);
-  });
+  };
 
-  app.post("/b2b/sessions/authenticate", async (c) => {
-    const body = await readJsonBody<Record<string, unknown>>(c);
-    return authenticateFromSession(c, body);
-  });
+  app.post("/v1/b2b/sessions/authenticate", authenticateHandler);
+  app.post("/b2b/sessions/authenticate", authenticateHandler);
 
-  app.post("/v1/b2b/sessions/revoke", async (c) => {
-    const auth = requireServerAuth(c, store);
-    if (auth !== true) return auth;
+  const revokeHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     return revokeSession(c, body);
-  });
+  };
 
-  app.post("/b2b/sessions/revoke", async (c) => {
-    const body = await readJsonBody<Record<string, unknown>>(c);
-    return revokeSession(c, body);
-  });
+  app.post("/v1/b2b/sessions/revoke", revokeHandler);
+  app.post("/b2b/sessions/revoke", revokeHandler);
 
-  app.post("/b2b/sessions/exchange", async (c) => {
+  const exchangeHandler = async (c: Context<AppEnv>) => {
     const body = await readJsonBody<Record<string, unknown>>(c);
     const resolved = getSessionFromRequest(c, store, body);
     if (!resolved) return stytchError(c, 401, "session_not_found", "Session not found.");
@@ -81,7 +73,10 @@ export function sessionRoutes({ app, store }: RouteContext): void {
       }),
     );
     return withSessionCookies(response, getStytchConfig(store) ?? defaultCredentials(), next.session);
-  });
+  };
+
+  app.post("/v1/b2b/sessions/exchange", exchangeHandler);
+  app.post("/b2b/sessions/exchange", exchangeHandler);
 
   async function authenticateFromSession(c: Context<AppEnv>, body: Record<string, unknown>) {
     const resolved = getSessionFromRequest(c, store, body);
@@ -102,12 +97,24 @@ export function sessionRoutes({ app, store }: RouteContext): void {
 
   async function revokeSession(c: Context<AppEnv>, body: Record<string, unknown>) {
     const resolved = getSessionFromRequest(c, store, body);
-    const session =
-      resolved?.session ??
-      (typeof body.member_session_id === "string" ? ss.sessions.findOneBy("member_session_id", body.member_session_id) : undefined);
+    const memberId = typeof body.member_id === "string" ? body.member_id : "";
+    const explicitSession =
+      (typeof body.member_session_id === "string" ? ss.sessions.findOneBy("member_session_id", body.member_session_id) : undefined) ??
+      (typeof body.session_token === "string" ? ss.sessions.findOneBy("session_token", body.session_token) : undefined) ??
+      (typeof body.session_jwt === "string" ? ss.sessions.findOneBy("session_jwt", body.session_jwt) : undefined);
+    const session = resolved?.session ?? explicitSession;
+
+    if (memberId && !session) {
+      const auth = requireServerAuth(c, store);
+      if (auth !== true) return auth;
+      revokeSessionsForMember(store, memberId);
+      const response = c.json(success({ member_id: memberId }));
+      return clearSessionCookies(response, getStytchConfig(store) ?? defaultCredentials());
+    }
+
     if (!session) return stytchError(c, 401, "session_not_found", "Session not found.");
 
-    revokeSessionsForMember(store, session.member_id, session.organization_id);
+    ss.sessions.update(session.id, { revoked_at: new Date().toISOString() });
     const response = c.json(success({ member_id: session.member_id, member_session_id: session.member_session_id }));
     return clearSessionCookies(response, getStytchConfig(store) ?? defaultCredentials());
   }

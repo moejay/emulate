@@ -11,11 +11,11 @@ import {
   pickConnectFields,
   randomToken,
   renderManualField,
+  requireApiAuth,
   requireConnectSession,
   resolveSessionToken,
-  toFullConnectionShape,
 } from "../helpers.js";
-import type { NangoConnectSession, NangoConnection, NangoConnectionCredentials, NangoEndUser } from "../entities.js";
+import type { NangoConnectSession, NangoConnectionCredentials, NangoEndUser } from "../entities.js";
 import { getNangoStore } from "../store.js";
 import { dispatchConnectionWebhook, upsertConnection } from "./shared.js";
 
@@ -25,10 +25,7 @@ export function connectRoutes({ app, store, baseUrl }: RouteContext): void {
   const ns = () => getNangoStore(store);
 
   app.post("/connect/sessions", async (c) => {
-    const authHeader = c.req.header("Authorization") ?? "";
-    if (!authHeader.match(/^(Bearer|token)\s+/i) || !authHeader.endsWith(getRuntimeConfig(store).secret_key)) {
-      return c.json({ error: "unauthorized" }, 401);
-    }
+    requireApiAuth(c, store);
 
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const allowedIntegrations = Array.isArray(body.allowed_integrations)
@@ -77,10 +74,7 @@ export function connectRoutes({ app, store, baseUrl }: RouteContext): void {
   });
 
   app.post("/connect/sessions/reconnect", async (c) => {
-    const authHeader = c.req.header("Authorization") ?? "";
-    if (!authHeader.match(/^(Bearer|token)\s+/i) || !authHeader.endsWith(getRuntimeConfig(store).secret_key)) {
-      return c.json({ error: "unauthorized" }, 401);
-    }
+    requireApiAuth(c, store);
 
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const connectionId = typeof body.connection_id === "string" ? body.connection_id : "";
@@ -172,8 +166,8 @@ export function connectRoutes({ app, store, baseUrl }: RouteContext): void {
     return c.html(renderCardPage(
       "Nango Connect",
       "Preparing your local connection flow.",
-      `<div class="info-text" style="margin-bottom:16px">This window will load as soon as the session token arrives from the parent app.</div>
-<button class="user-btn" type="button" onclick="window.parent.postMessage({ type: 'close' }, '*')"><span class="user-login">Close</span></button>
+      `<div class="info-text">This window will load as soon as the session token arrives from the parent app.</div>
+<div class="user-form"><button class="user-btn" type="button" onclick="window.parent.postMessage({ type: 'close' }, '*')"><span class="user-login">Close</span></button></div>
 <script>
 window.parent.postMessage({ type: 'ready' }, '*');
 window.addEventListener('message', function(event) {
@@ -197,7 +191,7 @@ window.addEventListener('message', function(event) {
         session.is_reconnecting
           ? "Reconnect the selected local integration."
           : "Choose a seeded local connection flow.",
-        `${body}<div class="info-text" style="margin-top:16px">Session expires at ${escapeHtml(session.expires_at)}.</div>`,
+        `${body}<div class="info-text">Session expires at ${escapeHtml(session.expires_at)}.</div>`,
         SERVICE_LABEL,
       ));
     } catch (err) {
@@ -386,10 +380,10 @@ window.addEventListener('message', function(event) {
   app.get("/connect/finalize", (c) => {
     const providerConfigKey = c.req.query("provider_config_key") ?? "";
     const connectionId = c.req.query("connection_id") ?? "";
-    const body = `<div class="info-text" style="margin-bottom:16px">Connection created for ${escapeHtml(providerConfigKey)}.</div>
-<button class="user-btn" type="button" onclick="window.parent.postMessage({ type: 'connect', payload: { providerConfigKey: ${JSON.stringify(providerConfigKey)}, connectionId: ${JSON.stringify(connectionId)}, isPending: false } }, '*')"><span class="user-login">Send connect event</span></button>
-<div class="info-text" style="margin-top:16px">If the parent app does not close automatically, use the button below.</div>
-<button class="user-btn" type="button" onclick="window.parent.postMessage({ type: 'close' }, '*')" style="margin-top:8px"><span class="user-login">Close</span></button>
+    const body = `<div class="info-text">Connection created for ${escapeHtml(providerConfigKey)}.</div>
+<div class="user-form"><button class="user-btn" type="button" onclick="window.parent.postMessage({ type: 'connect', payload: { providerConfigKey: ${JSON.stringify(providerConfigKey)}, connectionId: ${JSON.stringify(connectionId)}, isPending: false } }, '*')"><span class="user-login">Send connect event</span></button></div>
+<div class="info-text">If the parent app does not close automatically, use the button below.</div>
+<div class="user-form"><button class="user-btn" type="button" onclick="window.parent.postMessage({ type: 'close' }, '*')"><span class="user-login">Close</span></button></div>
 <script>
 window.parent.postMessage({ type: 'connect', payload: { providerConfigKey: ${JSON.stringify(providerConfigKey)}, connectionId: ${JSON.stringify(connectionId)}, isPending: false } }, '*');
 </script>`;
@@ -411,9 +405,9 @@ function renderIntegrationPanel(session: NangoConnectSession, integration: Retur
         ${pickConnectFields(integration).map((field) => renderManualField(field)).join("\n")}
         <button class="user-btn" type="submit"><span class="user-login">${escapeHtml(integration.connect_button_label ?? `Connect ${integration.display_name}`)}</span></button>
       </form>`;
-  const docs = docsUrl ? `<div class="info-text" style="margin-top:10px"><a href="${escapeAttr(docsUrl)}" target="_blank" rel="noopener">Open provider docs</a></div>` : "";
-  return `<section style="margin-bottom:18px">
-    <div class="card-title" style="font-size:1rem">${escapeHtml(integration.display_name)}</div>
+  const docs = docsUrl ? `<div class="info-text"><a href="${escapeAttr(docsUrl)}" target="_blank" rel="noopener">Open provider docs</a></div>` : "";
+  return `<section class="s-card">
+    <div class="card-title">${escapeHtml(integration.display_name)}</div>
     <div class="card-subtitle">Provider key: <strong>${escapeHtml(integration.unique_key)}</strong></div>
     ${action}
     ${docs}

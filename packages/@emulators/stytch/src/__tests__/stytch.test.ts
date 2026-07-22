@@ -203,7 +203,7 @@ describe("Stytch emulator", () => {
   });
 
   it("authenticates password sessions and authenticates them again with the server SDK", async () => {
-    const authRes = await server.app.request(`${base}/b2b/passwords/authenticate`, {
+    const authRes = await server.app.request(`${base}/v1/b2b/passwords/authenticate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -245,7 +245,7 @@ describe("Stytch emulator", () => {
     expect(startRes.status).toBe(200);
 
     const token = findAuthToken(server.store, "multi_tenant_passwords", "bob@acme.com");
-    const resetRes = await server.app.request(`${base}/b2b/passwords/email/reset`, {
+    const resetRes = await server.app.request(`${base}/v1/b2b/passwords/email/reset`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password_reset_token: token, password: "bob-password", session_duration_minutes: 30 }),
@@ -255,7 +255,7 @@ describe("Stytch emulator", () => {
     expect(resetBody.member.status).toBe("active");
     expect(resetBody.member.member_password_id).toBeTruthy();
 
-    const loginRes = await server.app.request(`${base}/b2b/passwords/authenticate`, {
+    const loginRes = await server.app.request(`${base}/v1/b2b/passwords/authenticate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ organization_id: "organization-acme", email_address: "bob@acme.com", password: "bob-password" }),
@@ -287,7 +287,7 @@ describe("Stytch emulator", () => {
   });
 
   it("supports discovery magic links and intermediate session exchange", async () => {
-    const sendRes = await server.app.request(`${base}/b2b/magic_links/email/discovery/send`, {
+    const sendRes = await server.app.request(`${base}/v1/b2b/magic_links/email/discovery/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email_address: "alice@acme.com", discovery_redirect_url: "http://localhost:3000/authenticate" }),
@@ -295,7 +295,7 @@ describe("Stytch emulator", () => {
     expect(sendRes.status).toBe(200);
 
     const token = findAuthToken(server.store, "discovery", "alice@acme.com");
-    const authRes = await server.app.request(`${base}/b2b/magic_links/discovery/authenticate`, {
+    const authRes = await server.app.request(`${base}/v1/b2b/magic_links/discovery/authenticate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ discovery_magic_links_token: token }),
@@ -307,7 +307,7 @@ describe("Stytch emulator", () => {
     };
     expect(authBody.discovered_organizations).toHaveLength(2);
 
-    const exchangeRes = await server.app.request(`${base}/b2b/discovery/intermediate_sessions/exchange`, {
+    const exchangeRes = await server.app.request(`${base}/v1/b2b/discovery/intermediate_sessions/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -342,7 +342,7 @@ describe("Stytch emulator", () => {
     const redirect = new URL(callbackRes.headers.get("location")!);
     expect(redirect.searchParams.get("stytch_token_type")).toBe("discovery_oauth");
 
-    const authRes = await server.app.request(`${base}/b2b/oauth/discovery/authenticate`, {
+    const authRes = await server.app.request(`${base}/v1/b2b/oauth/discovery/authenticate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ discovery_oauth_token: redirect.searchParams.get("token") }),
@@ -356,16 +356,25 @@ describe("Stytch emulator", () => {
     expect(authBody.discovered_organizations).toHaveLength(2);
   });
 
-  it("supports session exchange and revoke with cookie auth", async () => {
-    const authRes = await server.app.request(`${base}/b2b/passwords/authenticate`, {
+  it("supports session exchange and revokes only the addressed session", async () => {
+    const authRes = await server.app.request(`${base}/v1/b2b/passwords/authenticate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ organization_id: "organization-acme", email_address: "alice@acme.com", password: "alice-password" }),
     });
     expect(authRes.status).toBe(200);
+    const authBody = (await authRes.json()) as { session_jwt: string };
     const cookieHeader = getCookieHeader(authRes);
 
-    const exchangeRes = await server.app.request(`${base}/b2b/sessions/exchange`, {
+    const secondSessionRes = await server.app.request(`${base}/v1/b2b/passwords/authenticate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organization_id: "organization-acme", email_address: "alice@acme.com", password: "alice-password" }),
+    });
+    expect(secondSessionRes.status).toBe(200);
+    const secondSessionBody = (await secondSessionRes.json()) as { session_jwt: string };
+
+    const exchangeRes = await server.app.request(`${base}/v1/b2b/sessions/exchange`, {
       method: "POST",
       headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
       body: JSON.stringify({ organization_id: "organization-beta", session_duration_minutes: 15 }),
@@ -374,20 +383,26 @@ describe("Stytch emulator", () => {
     const exchangeBody = (await exchangeRes.json()) as { organization: { organization_id: string } };
     expect(exchangeBody.organization.organization_id).toBe("organization-beta");
 
-    const exchangedCookie = getCookieHeader(exchangeRes);
-    const revokeRes = await server.app.request(`${base}/b2b/sessions/revoke`, {
+    const revokeRes = await server.app.request(`${base}/v1/b2b/sessions/revoke`, {
       method: "POST",
-      headers: { Cookie: exchangedCookie, "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_jwt: authBody.session_jwt }),
     });
     expect(revokeRes.status).toBe(200);
 
-    const failedAuthRes = await server.app.request(`${base}/b2b/sessions/authenticate`, {
+    const failedAuthRes = await server.app.request(`${base}/v1/b2b/sessions/authenticate`, {
       method: "POST",
-      headers: { Cookie: exchangedCookie, "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_jwt: authBody.session_jwt }),
     });
     expect(failedAuthRes.status).toBe(401);
+
+    const otherSessionRes = await server.app.request(`${base}/v1/b2b/sessions/authenticate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_jwt: secondSessionBody.session_jwt }),
+    });
+    expect(otherSessionRes.status).toBe(200);
   });
 
   it("renders the inspector", async () => {

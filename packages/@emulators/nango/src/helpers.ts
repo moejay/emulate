@@ -341,7 +341,7 @@ export function renderManualField(field: NangoManualField, value = ""): string {
   const type = field.type ?? "text";
   const placeholder = field.placeholder ? ` placeholder="${escapeAttr(field.placeholder)}"` : "";
   const help = field.help_text ? `<div class="info-text">${escapeHtml(field.help_text)}</div>` : "";
-  return `<div style="margin-bottom:12px">
+  return `<div class="checkout-form-section">
     <label class="checkout-form-label" for="${escapeAttr(field.name)}">${escapeHtml(field.label)}</label>
     <input class="checkout-input" id="${escapeAttr(field.name)}" name="${escapeAttr(field.name)}" type="${escapeAttr(type)}" value="${escapeAttr(value)}"${placeholder}${required}/>
     ${help}

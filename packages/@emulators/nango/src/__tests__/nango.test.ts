@@ -82,6 +82,21 @@ describe("@emulators/nango", () => {
     globalThis.fetch = originalFetch;
   });
 
+  it("rejects malformed connect session bearer tokens", async () => {
+    const { app } = createNangoTestApp();
+
+    const response = await app.request(`${nangoBase}/connect/sessions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer wrong-${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ allowed_integrations: ["shopify"] }),
+    });
+
+    expect(response.status).toBe(401);
+  });
+
   it("lists seeded integrations and exposes connect sessions", async () => {
     const { app } = createNangoTestApp();
 
