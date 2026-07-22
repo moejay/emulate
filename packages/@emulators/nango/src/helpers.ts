@@ -189,6 +189,9 @@ export function buildOutgoingProxyHeaders(integration: NangoProviderConfig, conn
   if (integration.proxy_auth_mode === "oauth2-bearer" && connection.credentials.type === "OAUTH2") {
     headers.Authorization = `Bearer ${connection.credentials.access_token}`;
   }
+  if (integration.proxy_auth_mode === "shopify-access-token" && connection.credentials.type === "OAUTH2") {
+    headers["X-Shopify-Access-Token"] = connection.credentials.access_token;
+  }
   if (integration.proxy_auth_mode === "static-bearer" && integration.static_bearer_token) {
     headers.Authorization = `Bearer ${integration.static_bearer_token}`;
   }

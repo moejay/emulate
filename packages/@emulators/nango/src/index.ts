@@ -89,7 +89,7 @@ function seedDefaults(store: Store, _baseUrl: string): void {
         display_name: "Shopify",
         logo: createLogoDataUri("SH", "#95bf47"),
         auth_mode: "manual",
-        proxy_auth_mode: "none",
+        proxy_auth_mode: "shopify-access-token",
         proxy_base_url_mapping_key: "shopify",
         connect_button_label: "Save Shopify connection",
         manual_fields: [
@@ -104,7 +104,7 @@ function seedDefaults(store: Store, _baseUrl: string): void {
         display_name: "QuickBooks",
         logo: createLogoDataUri("QB", "#2ca01c"),
         auth_mode: "manual",
-        proxy_auth_mode: "none",
+        proxy_auth_mode: "oauth2-bearer",
         proxy_base_url_mapping_key: "quickbooks",
         connect_button_label: "Save QuickBooks connection",
         manual_fields: [

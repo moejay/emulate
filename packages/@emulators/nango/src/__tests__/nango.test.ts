@@ -159,6 +159,36 @@ describe("@emulators/nango", () => {
     });
   });
 
+  it("injects Shopify access tokens when proxying Admin GraphQL", async () => {
+    const { app } = createNangoTestApp({
+      base_url_mappings: { shopify: "http://shopify.test" },
+      connections: [{
+        connection_id: "shopify-auth-test",
+        provider_config_key: "shopify",
+        connection_config: { targetBaseUrl: "http://shopify.test" },
+        credentials: { type: "OAUTH2", access_token: "shpat_test_admin" },
+      }],
+    });
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input.toString(), init);
+      expect(request.headers.get("X-Shopify-Access-Token")).toBe("shpat_test_admin");
+      return Response.json({ data: { shop: { name: "Acme" } } });
+    });
+
+    const proxyRes = await app.request(`${nangoBase}/proxy/admin/api/2026-01/graphql.json`, {
+      method: "POST",
+      headers: authHeaders({
+        "Connection-Id": "shopify-auth-test",
+        "Provider-Config-Key": "shopify",
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({ query: "query { shop { name } }" }),
+    });
+
+    expect(proxyRes.status).toBe(200);
+    expect(await proxyRes.json()).toEqual({ data: { shop: { name: "Acme" } } });
+  });
+
   it("runs Google OAuth against the local Google emulator and proxies Gmail", async () => {
     const { app, store } = createNangoTestApp({
       base_url_mappings: { google: googleBase },

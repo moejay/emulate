@@ -1,7 +1,7 @@
 import type { Entity } from "@emulators/core";
 
 export type NangoAuthMode = "oauth2" | "manual" | "none";
-export type NangoProxyAuthMode = "oauth2-bearer" | "none" | "static-bearer";
+export type NangoProxyAuthMode = "oauth2-bearer" | "shopify-access-token" | "none" | "static-bearer";
 
 export interface NangoManualField {
   name: string;
