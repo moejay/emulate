@@ -29,6 +29,12 @@ const SERVICE_NAME_LIST = [
   "clerk",
   "linear",
   "twilio",
+  "stytch",
+  "nango",
+  "gadget",
+  "faire",
+  "shopify",
+  "quickbooks",
 ] as const;
 export type ServiceName = (typeof SERVICE_NAME_LIST)[number];
 export const SERVICE_NAMES: readonly ServiceName[] = SERVICE_NAME_LIST;
@@ -567,6 +573,149 @@ export const SERVICE_REGISTRY: Record<ServiceName, ServiceEntry> = {
           },
         ],
         strict_scopes: false,
+      },
+    },
+  },
+
+  stytch: {
+    label: "Stytch B2B authentication emulator",
+    endpoints: "B2B organizations, members, memberships, sessions, passwords, magic links, OAuth discovery, JWKS, inspector",
+    async load() {
+      const mod = await import("@emulators/stytch");
+      return { plugin: mod.stytchPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback() {
+      return { login: "member_test", id: 1, scopes: [] };
+    },
+    initConfig: {
+      stytch: {
+        organizations: [
+          {
+            organization_name: "Acme Foods",
+            organization_slug: "acme-foods",
+            members: [
+              { email_address: "admin@example.com", name: "Admin User", password: "local-password", is_admin: true },
+            ],
+          },
+        ],
+        google_identities: [{ email_address: "admin@example.com", name: "Admin User" }],
+      },
+    },
+  },
+
+  nango: {
+    label: "Nango integration proxy emulator",
+    endpoints: "provider configs, connections, Connect sessions, OAuth/manual connect, metadata, proxy forwarding, webhooks, inspector",
+    async load() {
+      const mod = await import("@emulators/nango");
+      return { plugin: mod.nangoPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback() {
+      return { login: "nango-local", id: 1, scopes: [] };
+    },
+    initConfig: {
+      nango: {
+        secret_key: "nango_local_secret",
+        base_url_mappings: {
+          google: "http://localhost:4002",
+          shopify: "http://localhost:4014",
+          quickbooks: "http://localhost:4015",
+        },
+      },
+    },
+  },
+
+  gadget: {
+    label: "Gadget GraphQL and webhook emulator",
+    endpoints: "GraphQL shops, customers, products, variants, orders, fulfillments, sample requests, webhooks, inspector",
+    async load() {
+      const mod = await import("@emulators/gadget");
+      return { plugin: mod.gadgetPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback() {
+      return { login: "gadget_local_key", id: 1, scopes: [] };
+    },
+    initConfig: {
+      gadget: {
+        apiKeys: [{ token: "gadget_local_key", label: "Local Grow" }],
+        shops: [{ name: "Acme Foods", myshopifyDomain: "acme-foods.myshopify.com" }],
+      },
+    },
+  },
+
+  faire: {
+    label: "Faire External API and Messenger emulator",
+    endpoints: "OAuth, brands, products, retailers, orders, shipments, Messenger conversations and messages, inspector",
+    async load() {
+      const mod = await import("@emulators/faire");
+      return { plugin: mod.fairePlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback() {
+      return { login: "faire_local_token", id: 1, scopes: [] };
+    },
+    initConfig: {
+      faire: {
+        brands: [{ brand_id: "brand_local", name: "Acme Foods" }],
+        users: [{ email: "admin@example.com", password: "local-password", brand_ids: ["brand_local"] }],
+        oauth_apps: [
+          {
+            application_token: "faire_local_app",
+            application_secret: "faire_local_secret",
+            name: "Local Grow",
+            redirect_urls: ["http://localhost:3000/api/integrations/faire/callback"],
+          },
+        ],
+        retailers: [{ retailer_id: "retailer_local", name: "Local Market" }],
+      },
+    },
+  },
+
+  shopify: {
+    label: "Shopify Admin API emulator",
+    endpoints: "OAuth, session tokens, Admin GraphQL, customers, companies, products, orders, fulfillments, bulk operations, webhooks, inspector",
+    async load() {
+      const mod = await import("@emulators/shopify");
+      return { plugin: mod.shopifyPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback() {
+      return { login: "shopify_local_token", id: 1, scopes: [] };
+    },
+    initConfig: {
+      shopify: {
+        shop: { name: "Acme Foods", myshopify_domain: "acme-foods.myshopify.com" },
+        oauth_apps: [
+          {
+            client_id: "shopify_local_client",
+            client_secret: "shopify_local_secret",
+            redirect_uris: ["http://localhost:3000/api/integrations/shopify/callback"],
+          },
+        ],
+        access_tokens: [{ token: "shopify_local_token", client_id: "shopify_local_client" }],
+      },
+    },
+  },
+
+  quickbooks: {
+    label: "QuickBooks Online API emulator",
+    endpoints: "OAuth, company info, query API, customers, vendors, items, invoices, sales receipts, payments, inspector",
+    async load() {
+      const mod = await import("@emulators/quickbooks");
+      return { plugin: mod.quickbooksPlugin, seedFromConfig: mod.seedFromConfig };
+    },
+    defaultFallback() {
+      return { login: "qbo_local_token", id: 1, scopes: [] };
+    },
+    initConfig: {
+      quickbooks: {
+        users: [{ email: "admin@example.com", name: "Admin User", realm_ids: ["1234567890"] }],
+        oauth_apps: [
+          {
+            client_id: "qbo_local_client",
+            client_secret: "qbo_local_secret",
+            redirect_uris: ["http://localhost:3000/api/integrations/quickbooks/callback"],
+          },
+        ],
+        companies: [{ realm_id: "1234567890", company_name: "Acme Foods" }],
       },
     },
   },

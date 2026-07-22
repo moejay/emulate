@@ -24,6 +24,12 @@ All services start with sensible defaults. No config file needed:
 - **Clerk** on `http://localhost:4011`
 - **Linear** on `http://localhost:4012`
 - **Twilio** on `http://localhost:4013`
+- **Stytch B2B** on `http://localhost:4014`
+- **Nango** on `http://localhost:4015`
+- **Gadget** on `http://localhost:4016`
+- **Faire** on `http://localhost:4017`
+- **Shopify** on `http://localhost:4018`
+- **QuickBooks Online** on `http://localhost:4019`
 
 ## CLI
 
