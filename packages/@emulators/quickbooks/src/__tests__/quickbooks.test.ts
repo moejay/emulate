@@ -281,6 +281,165 @@ describe("QuickBooks plugin", () => {
     expect(reusedRefresh.status).toBe(400);
   });
 
+  it("rejects authorization-code exchanges when client_id or redirect_uri do not match the authorize request", async () => {
+    seedFromConfig(store, base, {
+      users: [{ email: "dev@example.com", name: "Developer", realm_ids: ["3333333333333333"] }],
+      oauth_apps: [
+        {
+          client_id: "qbo-client-id",
+          client_secret: "qbo-client-secret",
+          name: "Grow Local",
+          redirect_uris: ["http://localhost:3000/api/integrations/qbo/callback"],
+        },
+        {
+          client_id: "other-client-id",
+          client_secret: "other-client-secret",
+          name: "Other App",
+          redirect_uris: ["http://localhost:3000/api/integrations/qbo/callback"],
+        },
+      ],
+      companies: [{ realm_id: "3333333333333333", company_name: "Realm Three" }],
+    });
+
+    const callbackRes = await app.request(`${base}/connect/oauth2/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: "qbo-client-id",
+        redirect_uri: "http://localhost:3000/api/integrations/qbo/callback",
+        scope: "com.intuit.quickbooks.accounting",
+        state: "abc123",
+        user_email: "dev@example.com",
+        realm_id: "3333333333333333",
+      }).toString(),
+      redirect: "manual",
+    });
+    const authCode = new URL(callbackRes.headers.get("Location") ?? "http://localhost/invalid").searchParams.get("code");
+    expect(authCode).toBeTruthy();
+
+    const wrongRedirect = await app.request(`${base}/oauth2/v1/tokens/bearer`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from("qbo-client-id:qbo-client-secret").toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: authCode!,
+        redirect_uri: "http://localhost:3000/api/integrations/qbo/other-callback",
+      }).toString(),
+    });
+    expect(wrongRedirect.status).toBe(400);
+    expect(await wrongRedirect.json()).toMatchObject({ error: "invalid_grant" });
+
+    const wrongClient = await app.request(`${base}/oauth2/v1/tokens/bearer`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from("other-client-id:other-client-secret").toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: authCode!,
+        redirect_uri: "http://localhost:3000/api/integrations/qbo/callback",
+      }).toString(),
+    });
+    expect(wrongClient.status).toBe(400);
+    expect(await wrongClient.json()).toMatchObject({ error: "invalid_grant" });
+
+    const correctExchange = await app.request(`${base}/oauth2/v1/tokens/bearer`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from("qbo-client-id:qbo-client-secret").toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: authCode!,
+        redirect_uri: "http://localhost:3000/api/integrations/qbo/callback",
+      }).toString(),
+    });
+    expect(correctExchange.status).toBe(200);
+  });
+
+  it("binds refresh-token rotation to the issuing OAuth client", async () => {
+    seedFromConfig(store, base, {
+      users: [{ email: "dev@example.com", name: "Developer", realm_ids: ["3333333333333333"] }],
+      oauth_apps: [
+        {
+          client_id: "qbo-client-id",
+          client_secret: "qbo-client-secret",
+          name: "Grow Local",
+          redirect_uris: ["http://localhost:3000/api/integrations/qbo/callback"],
+        },
+        {
+          client_id: "other-client-id",
+          client_secret: "other-client-secret",
+          name: "Other App",
+          redirect_uris: ["http://localhost:3000/api/integrations/qbo/callback"],
+        },
+      ],
+      companies: [{ realm_id: "3333333333333333", company_name: "Realm Three" }],
+    });
+
+    const callbackRes = await app.request(`${base}/connect/oauth2/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: "qbo-client-id",
+        redirect_uri: "http://localhost:3000/api/integrations/qbo/callback",
+        scope: "com.intuit.quickbooks.accounting",
+        state: "abc123",
+        user_email: "dev@example.com",
+        realm_id: "3333333333333333",
+      }).toString(),
+      redirect: "manual",
+    });
+    const authCode = new URL(callbackRes.headers.get("Location") ?? "http://localhost/invalid").searchParams.get("code");
+    expect(authCode).toBeTruthy();
+
+    const tokenRes = await app.request(`${base}/oauth2/v1/tokens/bearer`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from("qbo-client-id:qbo-client-secret").toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: authCode!,
+        redirect_uri: "http://localhost:3000/api/integrations/qbo/callback",
+      }).toString(),
+    });
+    const tokens = (await tokenRes.json()) as { refresh_token: string };
+
+    const wrongClientRefresh = await app.request(`${base}/oauth2/v1/tokens/bearer`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from("other-client-id:other-client-secret").toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: tokens.refresh_token,
+      }).toString(),
+    });
+    expect(wrongClientRefresh.status).toBe(400);
+    expect(await wrongClientRefresh.json()).toMatchObject({ error: "invalid_grant" });
+
+    const correctClientRefresh = await app.request(`${base}/oauth2/v1/tokens/bearer`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from("qbo-client-id:qbo-client-secret").toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: tokens.refresh_token,
+      }).toString(),
+    });
+    expect(correctClientRefresh.status).toBe(200);
+  });
+
   it("renders the shared-design inspector with query logs", async () => {
     await app.request(`${base}/v3/company/${DEFAULT_REALM_ID}/query?query=${encodeURIComponent("SELECT * FROM Customer STARTPOSITION 1 MAXRESULTS 1000")}`, {
       headers: auth(),

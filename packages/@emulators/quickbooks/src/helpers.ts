@@ -637,10 +637,15 @@ export function issueTokenPair(
   return { accessToken, refreshToken };
 }
 
-export function rotateRefreshToken(store: Store, refreshToken: string): { accessToken: string; refreshToken: string } | null {
+export function rotateRefreshToken(
+  store: Store,
+  refreshToken: string,
+  clientId?: string,
+): { accessToken: string; refreshToken: string } | null {
   const qs = getQuickBooksStore(store);
   const record = qs.refreshTokens.findOneBy("token", refreshToken);
   if (!record || record.revoked || record.expires_at < Date.now()) return null;
+  if (clientId && record.client_id !== clientId) return null;
   qs.refreshTokens.update(record.id, { revoked: true });
   return issueTokenPair(store, record.realm_id, record.user_email, record.client_id, record.scopes);
 }

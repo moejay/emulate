@@ -124,9 +124,16 @@ export function oauthRoutes({ app, store }: RouteContext): void {
 
     if (grantType === "authorization_code") {
       const code = String(body.code ?? "");
+      const redirectUri = String(body.redirect_uri ?? "");
       const pending = getPendingCode(store, code);
       if (!pending) {
         return c.json({ error: "invalid_grant", error_description: "The authorization code is invalid or expired." }, 400);
+      }
+      if (pending.client_id !== clientId) {
+        return c.json({ error: "invalid_grant", error_description: "The authorization code was not issued to this client." }, 400);
+      }
+      if (pending.redirect_uri !== redirectUri) {
+        return c.json({ error: "invalid_grant", error_description: "The redirect_uri does not match the authorization request." }, 400);
       }
       getPendingCodes(store).delete(code);
 
@@ -147,9 +154,9 @@ export function oauthRoutes({ app, store }: RouteContext): void {
 
     if (grantType === "refresh_token") {
       const currentRefreshToken = String(body.refresh_token ?? "");
-      const rotated = rotateRefreshToken(store, currentRefreshToken);
+      const rotated = rotateRefreshToken(store, currentRefreshToken, clientId);
       if (!rotated) {
-        return c.json({ error: "invalid_grant", error_description: "The refresh token is invalid or expired." }, 400);
+        return c.json({ error: "invalid_grant", error_description: "The refresh token is invalid, expired, or belongs to another client." }, 400);
       }
       return c.json({
         access_token: rotated.accessToken,

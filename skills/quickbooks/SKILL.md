@@ -118,7 +118,7 @@ Revocation URL:
 POST /oauth2/v1/tokens/revoke
 ```
 
-The authorization redirect includes both `code` and `realmId`, matching the real QBO callback contract. Refresh grants rotate refresh tokens.
+The authorization redirect includes both `code` and `realmId`, matching the real QBO callback contract. Authorization-code exchanges must reuse the same `client_id` and `redirect_uri` from the authorize step. Refresh grants rotate refresh tokens and are bound to the issuing OAuth client.
 
 ## Seed Config
 
