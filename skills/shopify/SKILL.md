@@ -1,7 +1,7 @@
 ---
 name: shopify
 description: Emulated Shopify Admin API for local development and testing. Use when the user needs local Shopify OAuth, Admin GraphQL queries, B2B customer and company data, products and variants, orders, fulfillments, bulk operations, draft orders, webhook subscriptions, GDPR webhooks, or Shopify session tokens without calling the real Shopify API. Triggers include "Shopify Admin API", "Shopify GraphQL", "Shopify OAuth", "Shopify webhooks", "bulk operations", "draft orders", "session token", or any task requiring a local Shopify backend.
-allowed-tools: Bash(npx emulate:*), Bash(emulate:*), Bash(curl:*)
+allowed-tools: Bash(npx emulate:*), Bash(curl:*)
 ---
 
 # Shopify Admin API Emulator

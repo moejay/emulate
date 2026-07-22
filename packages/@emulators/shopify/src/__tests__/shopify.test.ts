@@ -406,6 +406,22 @@ function createTestApp() {
         shipping_price: "0.00",
         line_items: [{ variant_id: 3003, quantity: 1 }],
       },
+      {
+        id: 4004,
+        name: "#1004",
+        customer_id: 1002,
+        email: "buyer2@north-market.test",
+        display_financial_status: "PAID",
+        display_fulfillment_status: "UNFULFILLED",
+        created_at: "2025-01-01T00:00:00.000Z",
+        updated_at: "2026-01-13T00:00:00.000Z",
+        subtotal: "48.00",
+        total_tax: "4.00",
+        total_price: "52.00",
+        total_discounts: "0.00",
+        shipping_price: "0.00",
+        line_items: [{ variant_id: 3001, quantity: 1 }],
+      },
     ],
   });
   return { app, store };
@@ -484,6 +500,26 @@ describe("Shopify emulator", () => {
       shopDomain: "demo-shop.myshopify.com",
     });
     expect(mintedPayload?.sub).toContain("gid://shopify/User/");
+
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 61_000);
+    expect(
+      verifySessionToken(store, mintedBody.token, {
+        clientId: "shopify-client-id",
+        shopDomain: "demo-shop.myshopify.com",
+      }),
+    ).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("rejects OAuth installs that request scopes outside the seeded app", async () => {
+    const { app } = createTestApp();
+
+    const authorize = await app.request(
+      `${base}/admin/oauth/authorize?client_id=shopify-client-id&redirect_uri=${encodeURIComponent("http://localhost:3000/api/auth/callback/shopify")}&scope=read_products,write_orders&shop=demo-shop.myshopify.com&state=abc`,
+    );
+    expect(authorize.status).toBe(400);
+    expect(await authorize.text()).toContain("Scope mismatch");
   });
 
   it("serves Grow product, customer, and order documents with cursor pagination", async () => {
@@ -622,6 +658,18 @@ describe("Shopify emulator", () => {
       body: JSON.stringify({ query: BULK_OPERATION_MUTATION, variables: { query: BULK_ORDERS_QUERY } }),
     });
     expect(orderBulk.status).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const orderPayload = JSON.parse((mockFetch.mock.calls.at(-1)?.[1] as RequestInit).body as string) as { url: string };
+    vi.unstubAllGlobals();
+    const orderJsonl = await app.request(orderPayload.url);
+    expect(orderJsonl.status).toBe(200);
+    const orderText = await orderJsonl.text();
+    expect(orderText).toContain("gid://shopify/Order/4002");
+    expect(orderText).not.toContain("gid://shopify/Order/4004");
+
+    vi.stubGlobal("fetch", mockFetch);
   });
 
   it("supports webhook subscriptions, GDPR topics, fulfillment mutations, and the inspector", async () => {
@@ -679,8 +727,8 @@ describe("Shopify emulator", () => {
       method: "POST",
       headers: adminHeaders(),
       body: JSON.stringify({
-        query: `mutation FulfillmentCreateV2($fulfillment: FulfillmentV2Input!) {
-          fulfillmentCreateV2(fulfillment: $fulfillment) {
+        query: `mutation FulfillmentCreate($fulfillment: FulfillmentV2Input!) {
+          fulfillmentCreate(fulfillment: $fulfillment) {
             fulfillment { id status trackingInfo { company number } createdAt }
             userErrors { field message }
           }
@@ -689,7 +737,13 @@ describe("Shopify emulator", () => {
           fulfillment: {
             lineItemsByFulfillmentOrder: [
               {
-                fulfillmentOrderId: "gid://shopify/FulfillmentOrder/9002",
+                fulfillmentOrderId: "gid://shopify/FulfillmentOrder/9001",
+                fulfillmentOrderLineItems: [
+                  {
+                    id: "gid://shopify/FulfillmentOrderLineItem/400101",
+                    quantity: 1,
+                  },
+                ],
               },
             ],
             trackingInfo: { company: "UPS", number: "1Z999" },
@@ -700,9 +754,44 @@ describe("Shopify emulator", () => {
     });
     expect(fulfillment.status).toBe(200);
     const fulfillmentBody = (await fulfillment.json()) as any;
-    expect(fulfillmentBody.data.fulfillmentCreateV2.userErrors).toEqual([]);
-    expect(fulfillmentBody.data.fulfillmentCreateV2.fulfillment.status).toBe("SUCCESS");
+    expect(fulfillmentBody.data.fulfillmentCreate.userErrors).toEqual([]);
+    expect(fulfillmentBody.data.fulfillmentCreate.fulfillment.status).toBe("SUCCESS");
     expect(mockFetch).toHaveBeenCalled();
+
+    const orderAfterFulfillment = await app.request(`${base}/admin/api/2026-01/graphql.json`, {
+      method: "POST",
+      headers: adminHeaders(),
+      body: JSON.stringify({
+        query: `query Order($id: ID!) {
+          order(id: $id) {
+            id
+            displayFulfillmentStatus
+            fulfillmentOrders(first: 10) {
+              edges {
+                node {
+                  id
+                  status
+                  lineItems(first: 10) {
+                    edges {
+                      node {
+                        id
+                        totalQuantity
+                        remainingQuantity
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }`,
+        variables: { id: "gid://shopify/Order/4001" },
+      }),
+    });
+    const orderAfterFulfillmentBody = (await orderAfterFulfillment.json()) as any;
+    expect(orderAfterFulfillmentBody.data.order.displayFulfillmentStatus).toBe("PARTIAL");
+    expect(orderAfterFulfillmentBody.data.order.fulfillmentOrders.edges[0].node.status).toBe("open");
+    expect(orderAfterFulfillmentBody.data.order.fulfillmentOrders.edges[0].node.lineItems.edges[0].node.remainingQuantity).toBe(1);
 
     const inspector = await app.request(`${base}/?tab=webhooks`);
     expect(inspector.status).toBe(200);

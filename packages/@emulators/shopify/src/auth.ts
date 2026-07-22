@@ -66,5 +66,13 @@ export function verifySessionToken(
   if (payload.aud !== opts.clientId) return null;
   if (payload.iss !== `https://${opts.shopDomain}/admin`) return null;
   if (payload.dest !== `https://${opts.shopDomain}/admin`) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  const exp = typeof payload.exp === "number" ? payload.exp : Number(payload.exp);
+  const nbf = typeof payload.nbf === "number" ? payload.nbf : Number(payload.nbf);
+
+  if (Number.isFinite(exp) && now >= exp) return null;
+  if (Number.isFinite(nbf) && now < nbf) return null;
+
   return payload;
 }

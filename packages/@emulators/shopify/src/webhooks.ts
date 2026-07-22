@@ -151,6 +151,23 @@ export function createDefaultWebhookPayload(topic: string, shopDomain: string, s
         status: draftOrder?.status ?? "invoice_sent",
       };
     }
+    case "bulk_operations/finish": {
+      const operation = ss.bulkOperations
+        .all()
+        .slice()
+        .sort((a, b) => b.numeric_id - a.numeric_id)[0];
+      return {
+        admin_graphql_api_id: operation?.bulk_operation_gid ?? "gid://shopify/BulkOperation/1",
+        status: operation?.status?.toLowerCase() ?? "completed",
+        type: "query",
+        object_count: String(operation?.object_count ?? 0),
+        url: operation?.url ?? null,
+        partial_data_url: null,
+        created_at: operation?.created_at ?? new Date().toISOString(),
+        completed_at: operation?.completed_at ?? new Date().toISOString(),
+        error_code: operation?.error_code ?? null,
+      };
+    }
     default:
       return { shop_domain: shopDomain, topic };
   }

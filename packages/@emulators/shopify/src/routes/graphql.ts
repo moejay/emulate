@@ -368,14 +368,26 @@ function inferBulkModel(query: string): string | null {
   return null;
 }
 
-function buildBulkJsonl(ss: ReturnType<typeof getShopifyStore>, model: string, _shopDomain: string): { lines: string[]; objectCount: number } {
+function extractBulkSearchQuery(query: string, model: string): string | null {
+  const match = query.match(new RegExp(`${model}\\s*\\(\\s*query\\s*:\\s*"([^"]*)"`, "i"));
+  return match?.[1] ?? null;
+}
+
+function buildBulkJsonl(
+  ss: ReturnType<typeof getShopifyStore>,
+  model: string,
+  _shopDomain: string,
+  rawQuery: string | null,
+): { lines: string[]; objectCount: number } {
   if (model === "customers") {
-    const lines = filterCustomers(ss, null).map((customer) => JSON.stringify(buildCustomerGraphql(ss, customer)));
-    return { lines, objectCount: lines.length };
+    const customers = filterCustomers(ss, rawQuery);
+    const lines = customers.map((customer) => JSON.stringify(buildCustomerGraphql(ss, customer)));
+    return { lines, objectCount: customers.length };
   }
   if (model === "products") {
+    const products = filterProducts(ss, rawQuery);
     const lines: string[] = [];
-    for (const product of filterProducts(ss, null)) {
+    for (const product of products) {
       const variants = ss.variants.findBy("product_gid", product.product_gid);
       lines.push(
         JSON.stringify({
@@ -413,11 +425,12 @@ function buildBulkJsonl(ss: ReturnType<typeof getShopifyStore>, model: string, _
         );
       }
     }
-    return { lines, objectCount: filterProducts(ss, null).length };
+    return { lines, objectCount: products.length };
   }
 
+  const orders = filterOrders(ss, rawQuery);
   const lines: string[] = [];
-  for (const order of filterOrders(ss, null)) {
+  for (const order of orders) {
     lines.push(
       JSON.stringify({
         id: order.order_gid,
@@ -490,7 +503,7 @@ function buildBulkJsonl(ss: ReturnType<typeof getShopifyStore>, model: string, _
       );
     }
   }
-  return { lines, objectCount: filterOrders(ss, null).length };
+  return { lines, objectCount: orders.length };
 }
 
 async function completeBulkOperation(
@@ -502,7 +515,7 @@ async function completeBulkOperation(
   const ss = getShopifyStore(ctx.store);
   const operation = ss.bulkOperations.findOneBy("bulk_operation_gid", operationGid);
   if (!operation) return;
-  const result = buildBulkJsonl(ss, model, auth.shopDomain);
+  const result = buildBulkJsonl(ss, model, auth.shopDomain, extractBulkSearchQuery(operation.query, model));
   const apiVersion = DEFAULT_API_VERSION;
   const url = `${ctx.baseUrl.replace(/\/$/, "")}/admin/api/${apiVersion}/bulk/${numberFromGid(operationGid)}.jsonl`;
   ss.bulkOperations.update(operation.id, {
@@ -884,6 +897,7 @@ export function graphqlRoutes(ctx: RouteContext): void {
     }
 
     if (query.includes("fulfillmentCreate") || query.includes("fulfillmentCreateV2")) {
+      const mutationField = query.includes("fulfillmentCreateV2") ? "fulfillmentCreateV2" : "fulfillmentCreate";
       const fulfillmentInput = ((variables.fulfillment ?? variables.input ?? {}) as {
         lineItemsByFulfillmentOrder?: Array<{
           fulfillmentOrderId?: string;
@@ -892,13 +906,14 @@ export function graphqlRoutes(ctx: RouteContext): void {
         trackingInfo?: { company?: string; number?: string; numbers?: string[] };
         notifyCustomer?: boolean;
       }) ?? { lineItemsByFulfillmentOrder: [] };
-      const fulfillmentOrders = (fulfillmentInput.lineItemsByFulfillmentOrder ?? [])
+      const requestedGroups = fulfillmentInput.lineItemsByFulfillmentOrder ?? [];
+      const fulfillmentOrders = requestedGroups
         .map((item) => item.fulfillmentOrderId ? ss().fulfillmentOrders.findOneBy("fulfillment_order_gid", item.fulfillmentOrderId) : undefined)
         .filter(Boolean);
       if (fulfillmentOrders.length === 0) {
         return c.json({
           data: {
-            fulfillmentCreateV2: {
+            [mutationField]: {
               fulfillment: null,
               userErrors: [{ field: ["lineItemsByFulfillmentOrder"], message: "No fulfillment orders found." }],
             },
@@ -909,7 +924,7 @@ export function graphqlRoutes(ctx: RouteContext): void {
       if (!order) {
         return c.json({
           data: {
-            fulfillmentCreateV2: {
+            [mutationField]: {
               fulfillment: null,
               userErrors: [{ field: ["order"], message: "Order not found." }],
             },
@@ -917,29 +932,68 @@ export function graphqlRoutes(ctx: RouteContext): void {
         });
       }
 
-      const requestedLineItemIds = new Set<string>();
-      for (const group of fulfillmentInput.lineItemsByFulfillmentOrder ?? []) {
-        for (const lineItem of group.fulfillmentOrderLineItems ?? []) {
-          if (lineItem.id) requestedLineItemIds.add(lineItem.id);
+      const requestedQuantitiesByFulfillmentOrder = new Map<string, Map<string, number>>();
+      for (const group of requestedGroups) {
+        if (!group.fulfillmentOrderId) continue;
+        const fulfillmentOrder = ss().fulfillmentOrders.findOneBy("fulfillment_order_gid", group.fulfillmentOrderId);
+        if (!fulfillmentOrder) continue;
+
+        const quantities = new Map<string, number>();
+        if ((group.fulfillmentOrderLineItems?.length ?? 0) > 0) {
+          for (const lineItem of group.fulfillmentOrderLineItems ?? []) {
+            if (!lineItem.id) continue;
+            quantities.set(lineItem.id, Math.max(0, lineItem.quantity ?? 0));
+          }
+        } else {
+          for (const lineItem of fulfillmentOrder.line_items) {
+            quantities.set(lineItem.id, lineItem.remaining_quantity);
+          }
         }
+        requestedQuantitiesByFulfillmentOrder.set(group.fulfillmentOrderId, quantities);
       }
 
+      const fulfilledLineItemGids = new Set<string>();
+      let anyQuantityFulfilled = false;
+
       for (const fulfillmentOrder of fulfillmentOrders) {
+        const requestedQuantities = requestedQuantitiesByFulfillmentOrder.get(fulfillmentOrder!.fulfillment_order_gid) ?? new Map<string, number>();
         const nextLineItems = fulfillmentOrder!.line_items.map((lineItem) => {
-          if (requestedLineItemIds.size > 0 && !requestedLineItemIds.has(lineItem.id)) return lineItem;
-          return { ...lineItem, remaining_quantity: 0 };
+          const requestedQuantity = requestedQuantities.get(lineItem.id) ?? 0;
+          if (requestedQuantity <= 0) return lineItem;
+
+          const fulfilledQuantity = Math.min(lineItem.remaining_quantity, requestedQuantity);
+          if (fulfilledQuantity > 0) {
+            anyQuantityFulfilled = true;
+            fulfilledLineItemGids.add(lineItem.line_item_gid);
+          }
+
+          return {
+            ...lineItem,
+            remaining_quantity: Math.max(0, lineItem.remaining_quantity - fulfilledQuantity),
+          };
         });
+        const isClosed = nextLineItems.every((lineItem) => lineItem.remaining_quantity === 0);
         ss().fulfillmentOrders.update(fulfillmentOrder!.id, {
-          status: "closed",
+          status: isClosed ? "closed" : "open",
           request_status: "accepted",
-          supported_actions: [],
+          supported_actions: isClosed ? [] : ["create_fulfillment"],
           line_items: nextLineItems,
+        });
+      }
+
+      if (!anyQuantityFulfilled) {
+        return c.json({
+          data: {
+            [mutationField]: {
+              fulfillment: null,
+              userErrors: [{ field: ["lineItemsByFulfillmentOrder"], message: "No fulfillment quantities were available to fulfill." }],
+            },
+          },
         });
       }
 
       const fulfillmentGid = ensureGid("Fulfillment", 6100 + ss().fulfillments.all().length + 1);
       const trackingNumbers = fulfillmentInput.trackingInfo?.numbers ?? (fulfillmentInput.trackingInfo?.number ? [fulfillmentInput.trackingInfo.number] : []);
-      const lineItemGids = fulfillmentOrders.flatMap((fulfillmentOrder) => fulfillmentOrder!.line_items.map((lineItem) => lineItem.line_item_gid));
       const fulfillment = ss().fulfillments.insert({
         fulfillment_gid: fulfillmentGid,
         numeric_id: numberFromGid(fulfillmentGid),
@@ -947,12 +1001,22 @@ export function graphqlRoutes(ctx: RouteContext): void {
         status: "SUCCESS",
         tracking_company: fulfillmentInput.trackingInfo?.company ?? null,
         tracking_numbers: trackingNumbers,
-        line_item_gids: lineItemGids,
+        line_item_gids: [...fulfilledLineItemGids],
         notify_customer: fulfillmentInput.notifyCustomer ?? false,
         created_at_iso: new Date().toISOString(),
       });
+
+      const updatedFulfillmentOrders = order.fulfillment_order_gids
+        .map((gid) => ss().fulfillmentOrders.findOneBy("fulfillment_order_gid", gid))
+        .filter(Boolean);
+      const displayFulfillmentStatus = updatedFulfillmentOrders.every((fulfillmentOrder) =>
+        fulfillmentOrder!.line_items.every((lineItem) => lineItem.remaining_quantity === 0),
+      )
+        ? "FULFILLED"
+        : "PARTIAL";
+
       ss().orders.update(order.id, {
-        display_fulfillment_status: "FULFILLED",
+        display_fulfillment_status: displayFulfillmentStatus,
         updated_at_iso: new Date().toISOString(),
         fulfillment_gids: [...order.fulfillment_gids, fulfillment.fulfillment_gid],
       });
@@ -968,7 +1032,7 @@ export function graphqlRoutes(ctx: RouteContext): void {
       });
       return c.json({
         data: {
-          fulfillmentCreateV2: {
+          [mutationField]: {
             fulfillment: {
               id: fulfillment.fulfillment_gid,
               status: fulfillment.status,

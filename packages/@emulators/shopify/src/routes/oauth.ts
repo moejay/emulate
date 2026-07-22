@@ -6,6 +6,16 @@ import { mintSessionToken, resolveAdminAuth } from "../auth.js";
 
 const SERVICE_LABEL = "Shopify";
 
+function resolveRequestedScopes(scopeParam: string, allowedScopes: string[]): { scopes: string[]; invalidScopes: string[] } {
+  if (!scopeParam.trim()) {
+    return { scopes: [...allowedScopes], invalidScopes: [] };
+  }
+
+  const scopes = normalizeScopes(scopeParam);
+  const invalidScopes = scopes.filter((scope) => !allowedScopes.includes(scope));
+  return { scopes, invalidScopes };
+}
+
 export function oauthRoutes({ app, store }: RouteContext): void {
   const ss = () => getShopifyStore(store);
 
@@ -33,7 +43,18 @@ export function oauthRoutes({ app, store }: RouteContext): void {
       return c.html(renderErrorPage("Unknown shop", `No seeded shop matches '${shopDomain}'.`, SERVICE_LABEL), 400);
     }
 
-    const scopes = normalizeScopes(scope, appRecord.scopes);
+    const { scopes, invalidScopes } = resolveRequestedScopes(scope, appRecord.scopes);
+    if (invalidScopes.length > 0) {
+      return c.html(
+        renderErrorPage(
+          "Scope mismatch",
+          `The requested scopes are not registered for this application: ${invalidScopes.join(", ")}.`,
+          SERVICE_LABEL,
+        ),
+        400,
+      );
+    }
+
     const body = `<form method="post" action="/admin/oauth/authorize/confirm">
       <input type="hidden" name="client_id" value="${escapeAttr(clientId)}"/>
       <input type="hidden" name="redirect_uri" value="${escapeAttr(redirectUri)}"/>
@@ -72,8 +93,19 @@ export function oauthRoutes({ app, store }: RouteContext): void {
       return c.html(renderErrorPage("Install failed", "Unable to complete the local install flow.", SERVICE_LABEL), 400);
     }
 
+    const { scopes, invalidScopes } = resolveRequestedScopes(String(body.scope ?? ""), appRecord.scopes);
+    if (invalidScopes.length > 0) {
+      return c.html(
+        renderErrorPage(
+          "Scope mismatch",
+          `The requested scopes are not registered for this application: ${invalidScopes.join(", ")}.`,
+          SERVICE_LABEL,
+        ),
+        400,
+      );
+    }
+
     const code = randomHex(16);
-    const scopes = normalizeScopes(String(body.scope ?? ""), appRecord.scopes);
     ss().authCodes.insert({
       code,
       client_id: clientId,
