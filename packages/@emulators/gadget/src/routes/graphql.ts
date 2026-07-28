@@ -365,6 +365,12 @@ const schema = buildSchema(`
     sampleRequest: SampleRequest
   }
 
+  type GlobalActionPayload {
+    success: Boolean!
+    errors: [UserError!]!
+    result: JSON
+  }
+
   type Query {
     shopifyCustomers(first: Int, after: String, filter: ShopifyCustomerFilterInput, sort: ShopifySortInput): ShopifyCustomerConnection!
     shopifyProducts(first: Int, after: String, filter: ShopifyProductFilterInput, sort: ShopifySortInput): ShopifyProductConnection!
@@ -378,6 +384,7 @@ const schema = buildSchema(`
 
   type Mutation {
     updateSampleRequest(id: GadgetID!, sampleRequest: UpdateSampleRequestInput!): UpdateSampleRequestPayload!
+    listCustomerTagPage(shopId: String!, after: String): GlobalActionPayload!
   }
 `);
 
@@ -526,6 +533,46 @@ function createRoot(context: GraphQLContext) {
     sampleRequest: ({ id }: { id: string }) => {
       const row = gs().sampleRequests.findOneBy("gadget_id", id);
       return row ? formatSampleRequest(row) : null;
+    },
+
+    listCustomerTagPage: ({ shopId, after }: { shopId: string; after?: string | null }) => {
+      const shop = gs().shops.findOneBy("gadget_id", shopId);
+      if (!shop) {
+        return {
+          success: false,
+          errors: [{ message: `Shopify shop not found: ${shopId}`, code: "NOT_FOUND" }],
+          result: null,
+        };
+      }
+      const rows = gs()
+        .customers.all()
+        .filter((row) => row.shop_id === shopId)
+        .sort((left, right) =>
+          (left.legacy_resource_id ?? left.gadget_id).localeCompare(
+            right.legacy_resource_id ?? right.gadget_id,
+            undefined,
+            { numeric: true },
+          ),
+        );
+      const page = connectionFromArray(rows, { first: 250, after: after ?? undefined });
+      const tags = new Map<string, string>();
+      for (const edge of page.edges) {
+        for (const value of toTagList(edge.node.tags)) {
+          const display = value.trim();
+          if (!display) continue;
+          const normalized = display.toLocaleLowerCase("en-US");
+          if (!tags.has(normalized)) tags.set(normalized, display);
+        }
+      }
+      return {
+        success: true,
+        errors: [],
+        result: {
+          tags: [...tags.values()].sort((left, right) => left.localeCompare(right)),
+          customersScanned: page.edges.length,
+          pageInfo: page.pageInfo,
+        },
+      };
     },
 
     updateSampleRequest: async ({ id, sampleRequest }: { id: string; sampleRequest: Record<string, unknown> }) => {

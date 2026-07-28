@@ -63,6 +63,116 @@ describe("Gadget emulator", () => {
     });
   });
 
+  it("serves the pre-sync customer tag page action", async () => {
+    const { app } = createTestApp();
+    const mutation = `
+      mutation CustomerTags($shopId: String!, $after: String) {
+        listCustomerTagPage(shopId: $shopId, after: $after) {
+          success
+          errors { message code }
+          result
+        }
+      }
+    `;
+
+    const res = await gql(app, mutation, {
+      shopId: "gid://shopify/Shop/1",
+      after: null,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      data: {
+        listCustomerTagPage: {
+          success: true,
+          errors: [],
+          result: {
+            tags: ["b2b", "east-coast"],
+            customersScanned: 1,
+            pageInfo: {
+              hasNextPage: false,
+              endCursor: "MA",
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it("paginates customer tags in Shopify ID order", async () => {
+    const { app, store } = createTestApp();
+    const customers = getGadgetStore(store).customers;
+    const template = customers.all()[0];
+    for (let id = 351; id >= 102; id -= 1) {
+      customers.insert({
+        ...template,
+        id: `customer-${id}`,
+        gadget_id: `gid://shopify/Customer/${id}`,
+        legacy_resource_id: String(id),
+        email: `buyer-${id}@example.test`,
+        tags: [`tag-${id}`],
+      });
+    }
+
+    const mutation = `
+      mutation CustomerTags($shopId: String!, $after: String) {
+        listCustomerTagPage(shopId: $shopId, after: $after) {
+          success
+          result
+        }
+      }
+    `;
+    const first = await gql(app, mutation, {
+      shopId: "gid://shopify/Shop/1",
+      after: null,
+    });
+    const firstBody = await first.json() as {
+      data: { listCustomerTagPage: { result: { tags: string[]; pageInfo: { endCursor: string } } } };
+    };
+    expect(firstBody.data.listCustomerTagPage.result.tags).toHaveLength(251);
+    expect(firstBody.data.listCustomerTagPage.result.tags).not.toContain("tag-351");
+
+    const second = await gql(app, mutation, {
+      shopId: "gid://shopify/Shop/1",
+      after: firstBody.data.listCustomerTagPage.result.pageInfo.endCursor,
+    });
+    const secondBody = await second.json() as {
+      data: { listCustomerTagPage: { result: { tags: string[]; customersScanned: number } } };
+    };
+    expect(secondBody.data.listCustomerTagPage.result).toEqual({
+      tags: ["tag-351"],
+      customersScanned: 1,
+      pageInfo: { hasNextPage: false, endCursor: "MjUw" },
+    });
+  });
+
+  it("rejects customer tag pages for an unknown shop", async () => {
+    const { app } = createTestApp();
+    const mutation = `
+      mutation CustomerTags($shopId: String!) {
+        listCustomerTagPage(shopId: $shopId) {
+          success
+          errors { message code }
+          result
+        }
+      }
+    `;
+
+    const res = await gql(app, mutation, { shopId: "gid://shopify/Shop/missing" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      data: {
+        listCustomerTagPage: {
+          success: false,
+          errors: [{
+            message: "Shopify shop not found: gid://shopify/Shop/missing",
+            code: "NOT_FOUND",
+          }],
+          result: null,
+        },
+      },
+    });
+  });
+
   it("serves Grow's customer page query with addresses and pagination", async () => {
     const { app } = createTestApp();
     const query = `
