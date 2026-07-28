@@ -80,6 +80,7 @@ const schema = buildSchema(`
     shopId: StringFilterInput
     updatedAt: DateTimeFilterInput
     id: StringFilterInput
+    orderId: StringFilterInput
   }
 
   input ShopifyShopFilterInput {
