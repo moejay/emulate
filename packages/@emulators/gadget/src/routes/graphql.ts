@@ -16,6 +16,8 @@ import { connectionFromArray, ensureIso, toTagList, type ConnectionArgs } from "
 import { getGadgetStore } from "../store.js";
 import { dispatchSampleRequestRejected } from "../webhooks.js";
 
+const MAX_CUSTOMER_TAGS_PER_PAGE = 500;
+
 const schema = buildSchema(`
   scalar JSON
   scalar GadgetID
@@ -556,20 +558,24 @@ function createRoot(context: GraphQLContext) {
           ),
         );
       const page = connectionFromArray(rows, { first: 250, after: after ?? undefined });
-      const tags = new Map<string, string>();
-      for (const edge of page.edges) {
+      const tags = new Set<string>();
+      let tagsTruncated = false;
+      scan: for (const edge of page.edges) {
         for (const value of toTagList(edge.node.tags)) {
-          const display = value.trim();
-          if (!display) continue;
-          const normalized = display.toLocaleLowerCase("en-US");
-          if (!tags.has(normalized)) tags.set(normalized, display);
+          if (value.length === 0) continue;
+          tags.add(value);
+          if (tags.size > MAX_CUSTOMER_TAGS_PER_PAGE) {
+            tagsTruncated = true;
+            break scan;
+          }
         }
       }
       return {
         success: true,
         errors: [],
         result: {
-          tags: [...tags.values()].sort((left, right) => left.localeCompare(right)),
+          tags: [...tags].slice(0, MAX_CUSTOMER_TAGS_PER_PAGE).sort((left, right) => left.localeCompare(right)),
+          tagsTruncated,
           customersScanned: page.edges.length,
           pageInfo: page.pageInfo,
         },

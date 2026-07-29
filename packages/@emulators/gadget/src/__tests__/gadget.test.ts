@@ -87,6 +87,7 @@ describe("Gadget emulator", () => {
           errors: [],
           result: {
             tags: ["b2b", "east-coast"],
+            tagsTruncated: false,
             customersScanned: 1,
             pageInfo: {
               hasNextPage: false,
@@ -140,9 +141,41 @@ describe("Gadget emulator", () => {
     };
     expect(secondBody.data.listCustomerTagPage.result).toEqual({
       tags: ["tag-351"],
+      tagsTruncated: false,
       customersScanned: 1,
       pageInfo: { hasNextPage: false, endCursor: "MjUw" },
     });
+  });
+
+  it("caps large customer tag pages without normalizing exact values", async () => {
+    const { app, store } = createTestApp();
+    const customers = getGadgetStore(store).customers;
+    const template = customers.all()[0];
+    customers.insert({
+      ...template,
+      id: "tag-heavy-customer",
+      gadget_id: "gid://shopify/Customer/0",
+      legacy_resource_id: "0",
+      email: "tag-heavy@example.test",
+      tags: ["Case", "case", ...Array.from({ length: 500 }, (_, index) => `tag-${index + 1}`)],
+    });
+
+    const mutation = `
+      mutation CustomerTags($shopId: String!) {
+        listCustomerTagPage(shopId: $shopId) {
+          success
+          result
+        }
+      }
+    `;
+    const res = await gql(app, mutation, { shopId: "gid://shopify/Shop/1" });
+    const body = await res.json() as {
+      data: { listCustomerTagPage: { result: { tags: string[]; tagsTruncated: boolean } } };
+    };
+    expect(body.data.listCustomerTagPage.result.tags).toHaveLength(500);
+    expect(body.data.listCustomerTagPage.result.tags).toContain("Case");
+    expect(body.data.listCustomerTagPage.result.tags).toContain("case");
+    expect(body.data.listCustomerTagPage.result.tagsTruncated).toBe(true);
   });
 
   it("rejects customer tag pages for an unknown shop", async () => {
