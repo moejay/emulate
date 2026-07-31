@@ -22,6 +22,7 @@ export interface GadgetSeedConfig {
     domain?: string | null;
     myshopifyDomain?: string | null;
     name?: string | null;
+    grantedScopes?: string[];
   }>;
   customers?: Array<{
     id?: string;
@@ -161,6 +162,7 @@ export function seedDefaults(store: Store): void {
       domain: null,
       myshopify_domain: "acme-snacks.myshopify.com",
       name: "Acme Snacks",
+      granted_scopes: ["read_customers", "read_orders", "read_products"],
     });
   }
 
@@ -349,6 +351,7 @@ export function seedFromConfig(store: Store, _baseUrl: string, config: GadgetSee
       domain: shop.domain ?? null,
       myshopify_domain: shop.myshopifyDomain ?? null,
       name: shop.name ?? null,
+      granted_scopes: shop.grantedScopes ?? [],
     });
   }
 

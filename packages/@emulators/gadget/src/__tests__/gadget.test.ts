@@ -63,6 +63,24 @@ describe("Gadget emulator", () => {
     });
   });
 
+  it("serves the granted Shopify scopes used by Grow attention checks", async () => {
+    const { app } = createTestApp();
+    const res = await gql(app, `
+      query GadgetShopScopes($id: GadgetID!) {
+        shopifyShop(id: $id) { grantedScopes }
+      }
+    `, { id: "gid://shopify/Shop/1" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      data: {
+        shopifyShop: {
+          grantedScopes: ["read_customers", "read_orders", "read_products"],
+        },
+      },
+    });
+  });
+
   it("serves the pre-sync customer tag page action", async () => {
     const { app } = createTestApp();
     const mutation = `

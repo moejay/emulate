@@ -30,6 +30,7 @@ export interface GadgetShop extends Entity {
   domain: string | null;
   myshopify_domain: string | null;
   name: string | null;
+  granted_scopes: string[];
 }
 
 export interface GadgetCustomerAddress {

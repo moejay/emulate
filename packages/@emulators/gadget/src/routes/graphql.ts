@@ -255,6 +255,7 @@ const schema = buildSchema(`
     domain: String
     myshopifyDomain: String
     name: String
+    grantedScopes: [String!]!
   }
 
   type ShopifyCustomerEdge {
@@ -382,6 +383,7 @@ const schema = buildSchema(`
     shopifyOrderLineItems(first: Int, after: String, filter: ShopifyOrderLineItemFilterInput, sort: ShopifySortInput): ShopifyOrderLineItemConnection!
     shopifyFulfillments(first: Int, after: String, filter: ShopifyFulfillmentFilterInput, sort: ShopifySortInput): ShopifyFulfillmentConnection!
     shopifyShops(first: Int, after: String, filter: ShopifyShopFilterInput): ShopifyShopConnection!
+    shopifyShop(id: GadgetID!): ShopifyShop
     sampleRequest(id: GadgetID!): SampleRequest
   }
 
@@ -531,6 +533,11 @@ function createRoot(context: GraphQLContext) {
     shopifyShops: (args: ConnectionArgs & { filter?: Record<string, unknown> }) => {
       const rows = gs().shops.all().filter((row) => matchesShopFilter(row, args.filter));
       return connect(rows, args, formatShop);
+    },
+
+    shopifyShop: ({ id }: { id: string }) => {
+      const row = gs().shops.findOneBy("gadget_id", id);
+      return row ? formatShop(row) : null;
     },
 
     sampleRequest: ({ id }: { id: string }) => {
@@ -768,6 +775,7 @@ function formatShop(row: GadgetShop) {
     domain: row.domain,
     myshopifyDomain: row.myshopify_domain,
     name: row.name,
+    grantedScopes: row.granted_scopes,
   };
 }
 
